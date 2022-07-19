@@ -1,6 +1,8 @@
 network ?= devnet  # network := devnet|mainnet|testnet
-contract_addr_filepath ?= $(release_dirpath)/contract_addr.txt
 release_dirpath ?= ./release
+contract_addr_filepath ?= $(release_dirpath)/contract_addr.txt
+merkle_root_filepath ?= $(release_dirpath)/merkle-root.txt
+sender ?= juno16g2rahf5846rxzp3fwlswy08fz8ccuwk03k57y
 
 # build optimized WASM artifact
 build:
@@ -8,12 +10,11 @@ build:
 
 # deploy to local dev validator, assuming it's running
 deploy:
-	./bin/deploy ./artifacts/cw20_base.wasm $(network)
+	./bin/deploy $(network) $(sender) ./artifacts/cw20_glto_merkle_airdrop.wasm
 
 # instantiate last contract to be deployed
 instantiate:
-	# `minter` is the address of the admin, owner, and minter
-	./bin/instantiate $(network) $(minter)
+	./bin/instantiate $(network) $(sender) $(cw20_token_address)
 
 # run all unit tests
 test:
@@ -27,18 +28,15 @@ schemas:
 validator:
 	./bin/validator
 
-mint:
-	# mint some token for the given recipient address
-	./bin/client mint $(network) $(contract_addr_filepath) $(recipient) $(amount)
+# generate merkel tree for the given asset (osmo, juno, etc) and 
+# write root hash to file in ./merkle-tree directory.
+generate-merkle-root:
+	mkdir -p $(release_dirpath) && ./bin/merkle generate-merkle-root ../airdrop.json '$(merkle_root_filepath)'
 
-get-balance:
-	# get token balance for the given wallet address
-	./bin/client balance $(network) $(contract_addr_filepath) $(address)
+# upload merkle root hash to airdrop contract
+set-merkle-root-in-contract:
+	./bin/merkle set-merkle-root-in-contract $(network) $(sender) '$(contract_addr_filepath)' '$(merkle_root_filepath)'
 
-get-token-info:
-	# get token balance for the given wallet address
-	./bin/client info $(network) $(contract_addr_filepath)
-
-get-minter:
-	# get minter info (address, supply cap)
-	./bin/client minter $(network) $(contract_addr_filepath)
+# check if the given address has already claimed
+has-claimed:
+	./bin/merkle has-claimed $(network) '$(contract_addr_filepath)' '$(address)'

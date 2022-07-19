@@ -1,0 +1,93 @@
+#!/usr/bin/bash
+
+generate-merkle-root() {
+  airdrop_filepath=$1
+  output_filepath=$2
+  cd ./helpers
+  MERKLEROOT=$(./bin/run generateRoot --file $airdrop_filepath)
+  cd ..
+  echo $MERKLEROOT > $output_filepath
+}
+
+set-merkle-root-in-contract() {
+    contract_addr_filepath=$1
+    contract_addr=$(cat $contract_addr_filepath)
+    merkle_root_filepath=$2
+    merkle_root=$(cat $merkle_root_filepath)
+    flags=$3
+    echo junod tx wasm execute $contract_addr '{"register_merkle_root":{"merkle_root":"'$merkle_root'"}}' $flags -y
+    result=$(junod tx wasm execute $contract_addr '{"register_merkle_root":{"merkle_root":"'$merkle_root'"}}' $flags -y)
+    echo $result | jq
+}
+
+has-claimed() {
+    contract_addr_filepath=$1
+    contract_addr="$(cat $contract_addr_filepath)"
+    claimant_address=$2
+    flags="$3"
+    query='{"is_claimed":{"stage":1,"address":"'$address'"}}'
+    echo junod query wasm contract-state smart $contract_addr "$query" "$flags"
+    response=$(junod query wasm contract-state smart $contract_addr "$query" $flags)
+    echo $response | ./bin/utils/base64-decode-attributes | jq
+
+}
+
+
+# first CLI arg is the command name
+cmd=$1
+shift
+case $cmd in
+  has-claimed)
+    network=$1
+    case $network in
+      testnet)
+        node="https://rpc.uni.juno.deuslabs.fi:443"
+        chain_id=uni-3
+        ;;
+      mainnet)
+        node="https://rpc.juno.giansalex.dev:443"
+        chain_id=juno-1
+        ;;
+      devnet)
+        node="http://localhost:26657"
+        chain_id=testing
+        ;;
+    esac
+    contract_addr_filepath=$2
+    claimant_address=$3
+    flags="--node $node --chain-id $chain_id --output json"
+    echo "$flags" $claimant_address
+    has-claimed $contract_addr_filepath $claimant_address "$flags"
+    ;;
+  generate-merkle-root)
+    airdrop_filepath=$1
+    output_filepath=$2
+    generate-merkle-root $airdrop_filepath $output_filepath
+    ;;
+  set-merkle-root-in-contract)
+    network=$1
+    sender=$2
+    case $network in
+      devnet)
+        node="http://localhost:26657"
+        denom=ujunox
+        chain_id=testing
+        ;;
+      testnet)
+        node="https://rpc.uni.juno.deuslabs.fi:443"
+        denom=ujunox
+        chain_id=uni-3
+        ;;
+      mainnet)
+        NODE="https://rpc.juno.giansalex.dev:443"
+        denom=ujuno
+        chain_id=juno-1
+        ;;
+    esac
+
+    contract_addr_filepath="$3"
+    merkle_root_filepath="$4"
+    flags="--node "$node" --chain-id $chain_id --gas-prices 0.025$denom --gas auto --gas-adjustment 1.5 --from $sender --output json"
+    set-merkle-root-in-contract "$contract_addr_filepath" "$merkle_root_filepath" "$flags"
+    ;;
+esac

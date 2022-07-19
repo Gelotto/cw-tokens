@@ -1,13 +1,16 @@
 #!/bin/bash
 
 NETWORK=$1
-MINTER=$2
+WALLET=$2
+TOKEN_ADDR="$3"
+LABEL="GLTO_airdrop"
 RELEASE_DIR="./release"
 FILE_TX_HASH="tx_hash.txt"
 FILE_CONTRACT_ADDR="contract_addr.txt"
 FILE_CODE_ID="code_id.txt"
 CODE_ID=$(cat $RELEASE_DIR/$FILE_CODE_ID)
-INSTANTIATE_MSG='{"name":"Gelotto","symbol":"GLTO","decimals":6,"initial_balances":[],"mint":{"minter":"'$MINTER'","cap":"420690000","expires":{"never":{}}}}'
+OWNER_ADDR=
+INSTANTIATE_MSG=
 
 case $NETWORK in
   devnet)
@@ -16,7 +19,7 @@ case $NETWORK in
     CHAIN_ID=testing
     ;;
   testnet)
-    NODE="https://rpc.juno.giansalex.dev:443"
+    NODE="https://rpc.uni.juno.deuslabs.fi:443"
     DENOM=ujunox
     CHAIN_ID=uni-3
     ;;
@@ -27,10 +30,11 @@ case $NETWORK in
     ;;
 esac
 
-TXFLAG="--node $NODE --chain-id $CHAIN_ID --gas-prices 0.003$DENOM --gas auto --gas-adjustment 1.3"
+TXFLAG="--node $NODE --chain-id $CHAIN_ID --gas-prices 0.025$DENOM --gas auto --gas-adjustment 1.5"
+INSTANTIATE_MSG='{"cw20_token_address":"'$TOKEN_ADDR'","owner":"'$WALLET'"}'
 
 instantiate() { 
-    CMD="junod tx wasm instantiate $CODE_ID $INSTANTIATE_MSG --label "GLTO" --admin $MINTER --from $MINTER --output json -y $TXFLAG"
+    CMD="junod tx wasm instantiate $CODE_ID $INSTANTIATE_MSG --label "$LABEL" --no-admin --from $WALLET --output json -y $TXFLAG"
     echo "$CMD"
 
     RESULT=$($CMD)
@@ -45,7 +49,7 @@ instantiate() {
     while [[ $CONTRACT_ADDR == "" ]]
     do
         sleep 3
-        CONTRACT_ADDR=$(junod query tx $TXHASH --output json 2>/dev/null | jq -r '.logs[0].events[0].attributes[0].value')
+        CONTRACT_ADDR=$(junod query tx $TXHASH --node $NODE --chain-id $CHAIN_ID --output json 2>/dev/null | jq -r '.logs[0].events[0].attributes[0].value')
     done
 
     echo "contract address: $CONTRACT_ADDR"

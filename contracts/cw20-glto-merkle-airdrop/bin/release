@@ -1,0 +1,22 @@
+#!/usr/bin/bash
+#
+#
+
+# exit when any command fails
+set -e
+
+CMD=$1
+NETWORK=$2
+SENDER=$3
+
+shift 3
+
+case $CMD in
+    deploy-and-initialize-contract)
+        CW_TOKEN_ADDRESS=$1
+        make network=$NETWORK sender=$SENDER build deploy
+        make network=$NETWORK sender=$SENDER cw20_token_address=$CW_TOKEN_ADDRESS instantiate
+        make generate-merkle-root
+        make network=$NETWORK sender=$SENDER set-merkle-root-in-contract
+        ;;
+esac
